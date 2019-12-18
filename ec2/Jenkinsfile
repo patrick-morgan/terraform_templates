@@ -1,0 +1,64 @@
+pipeline {
+    agent any
+    parameters {
+        choice(
+            name: 'selection',
+            description: 'would you like to apply or destroy the stack?',
+            choices: ['apply', 'destroy']
+        )
+    }
+    stages {
+        stage('install-terraform') {
+            steps {
+                dir("ec2") {
+                    sh './terraformInstallation.bash'
+                }
+            }
+        }
+        stage('Init') {
+            steps {
+                dir("ec2") {
+                    sh './terraform init'
+                    echo "Initialized backend successfully!"
+                }
+            }
+        }
+        stage('Apply') {
+            steps {
+                    echo "Entering apply block"
+                    script {
+                        if(params.selection == "apply") {
+                            dir("ec2") {
+                                sh './terraform plan -out=myplan'
+                                def userInput = input(id: 'apply', message: 'Apply Terraform?', parameters: [ [$class: 'BooleanParameterDefinition', defaultValue: false, description: 'Read the plan above for what will be applied', name: 'confirm'] ])
+                                sh './terraform apply -input=false myplan'
+                            }
+                        }
+                        else {
+                            echo "Skipping over this!"
+                        }
+                    }
+            }
+        }
+        stage('Destroy') {
+            steps {
+                script {
+                    dir("ec2") {
+                        if(params.selection == "destroy") {
+                            sh './terraform plan -destroy'
+                            def destrInput = input(id: 'destroying', message: 'Would you like to destroy the stack?', parameters: [ [$class: 'BooleanParameterDefinition', defaultValue: false, description: 'CHECK WHAT YOU ARE DESTROYING ABOVE', name: 'confirm'] ])
+                            sh './terraform destroy -input=false -auto-approve'
+                            echo "The stack has been destroyed."
+                            return
+                        }
+                        else {
+                            echo "I did nothing in the destroy block except print this message. "
+                            return
+                        }
+                    }
+                    
+                }
+            }
+        }
+    }
+}
